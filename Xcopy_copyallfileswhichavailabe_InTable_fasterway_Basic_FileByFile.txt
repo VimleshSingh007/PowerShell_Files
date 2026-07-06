@@ -1,0 +1,73 @@
+---------------
+
+----select all the files 
+select filepath from xmultimedia where fileexists=1
+
+--save as txt file 
+select all in query result and save as txt
+
+----create one destination folder 
+
+--then run this command in powersheell ISE
+
+
+$sourceFile = "D:\NWH2025\XCopy\MultimediaFiles.txt"
+$destinationRoot = "D:\NWH2025\XCopy\Azure"
+$errorLogFile = "D:\NWH2025\XCopy\errorlog\error_log.txt"
+
+# Ensure destination and log folder exist
+$logDir = Split-Path $errorLogFile -Parent
+if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory | Out-Null }
+if (-not (Test-Path $destinationRoot)) { New-Item -Path $destinationRoot -ItemType Directory | Out-Null }
+
+# Clear previous log
+if (Test-Path $errorLogFile) { Clear-Content $errorLogFile }
+
+# Start process
+Write-Host "Reading file list from: $sourceFile"
+
+$total = 0
+$copied = 0
+$missing = 0
+
+foreach ($file in Get-Content $sourceFile) {
+    $path = $file.Trim()
+    if (-not [string]::IsNullOrWhiteSpace($path)) {
+        $total++
+        if (Test-Path $path) {
+            # Preserve folder structure
+            $relative = $path.Substring(3)  # remove "D:\"
+            $destPath = Join-Path $destinationRoot $relative
+            $destDir = Split-Path $destPath -Parent
+
+            if (-not (Test-Path $destDir)) {
+                New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+            }
+
+            Copy-Item -Path $path -Destination $destPath -Force
+            Write-Host "Copied: $path"
+            $copied++
+        } else {
+            Add-Content $errorLogFile "Missing: $path"
+            Write-Host "❌ Missing: $path"
+            $missing++
+        }
+    }
+}
+
+Write-Host ""
+Write-Host "✅ Done!"
+Write-Host "Total files: $total"
+Write-Host "Copied: $copied"
+Write-Host "Missing: $missing"
+Write-Host "Error log: $errorLogFile"
+
+
+
+-----save as powershell file
+
+then execute below 
+in poershell 
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
+D:\NWH2025\XCopy\CopyFiles.ps1

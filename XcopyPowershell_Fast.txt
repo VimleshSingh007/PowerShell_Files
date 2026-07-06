@@ -1,0 +1,76 @@
+$sourceFile     = "D:\NWH2005\XCopy\MultimediaFiles.txt"
+$destinationRoot = "D:\NWH2005\XCopy\Azure"
+$errorLogFile   = "D:\NWH2005\XCopy\errorlog\error_log.txt"
+
+# Ensure destination and log folder exist
+$logDir = Split-Path $errorLogFile -Parent
+if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory | Out-Null }
+if (-not (Test-Path $destinationRoot)) { New-Item -Path $destinationRoot -ItemType Directory | Out-Null }
+
+# Clear previous log
+if (Test-Path $errorLogFile) { Clear-Content $errorLogFile }
+
+Write-Host "Reading file list from: $sourceFile"
+
+# Read all lines at once (faster than Get-Content)
+$files = [System.IO.File]::ReadAllLines($sourceFile)
+
+$total = 0
+$copied = 0
+$missing = 0
+
+# Track folders already created
+$createdFolders = @{}
+
+foreach ($line in $files) {
+
+    $path = $line.Trim()
+
+    if (-not [string]::IsNullOrWhiteSpace($path)) {
+        $total++
+
+        if (Test-Path $path) {
+
+            # Maintain folder structure by removing drive letter (e.g. "D:\")
+            $relative = $path.Substring(3)
+            $destPath = Join-Path $destinationRoot $relative
+            $destDir  = Split-Path $destPath -Parent
+
+            # Create folder only once (performance boost)
+            if (-not $createdFolders.ContainsKey($destDir)) {
+                if (-not (Test-Path $destDir)) {
+                    New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+                }
+                $createdFolders[$destDir] = $true
+            }
+
+            # VERY FAST copy using ROBOCOPY
+            robocopy `
+                $(Split-Path $path -Parent) `
+                $destDir `
+                $(Split-Path $path -Leaf) `
+                /NFL /NDL /NJH /NJS /NC /NS /NP /R:1 /W:1 > $null
+
+            $copied++
+
+            # Show progress every 100 files (avoid slowing script)
+            if ($copied % 100 -eq 0) {
+                Write-Host "Copied $copied of $total files..."
+            }
+
+        } else {
+            Add-Content $errorLogFile "Missing: $path"
+            $missing++
+        }
+    }
+}
+
+Write-Host ""
+Write-Host "-----------------------------------------"
+Write-Host "               COMPLETED"
+Write-Host "-----------------------------------------"
+Write-Host "Total files listed : $total"
+Write-Host "Successfully copied: $copied"
+Write-Host "Missing files      : $missing"
+Write-Host "Error log saved to : $errorLogFile"
+Write-Host "-----------------------------------------"

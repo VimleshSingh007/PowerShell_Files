@@ -1,0 +1,43 @@
+copy the files from xmultimedia using .bat file 
+sath result in .bat format then run that file in cmd 
+
+SELECT DISTINCT
+    'ROBOCOPY "' 
+    + LEFT(FilePath, LEN(FilePath) - CHARINDEX('\', REVERSE(FilePath))) 
+    + '" "' 
+    + REPLACE(
+        LEFT(FilePath, LEN(FilePath) - CHARINDEX('\', REVERSE(FilePath))),
+        'D:\COC1012\EMRSourceData\20260304\CPTL_ARC_PRODUCTION_1',
+        'D:\COC1012-FA2\Azureuploaddocs'
+      ) 
+    + '" *.* /R:1 /W:1 /MT:8 /NFL /NDL /XO'
+FROM ar.xfinancialdocuments
+WHERE RecDelete = '0'
+  AND FileExists = 1;
+
+
+
+
+--copy all the folders and everything from one folder to another folder 
+
+--called it robocopy
+
+--- this command execute in power shell
+
+robocopy "D:\" "E:\SATH19960-01\emr2emrconversion\Multimedia_new\Files" /E /COPYALL /R:1 /W:1 /LOG:"E:\SATH19960-01\emr2emrconversion\Multimedia_new\robocopy_log.txt"
+
+
+--copy folder 
+
+
+$source      = "F:\CERDRH1001\EMRSourceData\20260320\Documents\Extract\ExtractionFailed"
+$destination = "F:\CERDRH1001\EMRSourceData\20260320\Documents\Error_log"
+
+robocopy `
+    $source `
+    $destination `
+    /E `
+    /MT:16 `
+    /R:1 /W:1 `
+    /XO `
+    /NFL /NDL /NJH /NJS /NC /NS /NP

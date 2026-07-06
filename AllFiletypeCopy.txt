@@ -1,0 +1,242 @@
+$sourceFile = "J:\BMC1001\BMC1001_XCOPY_2017_2026\MultimediaFiles.txt"
+
+$destinationRoot = "J:\BMC1001\BMC1001_XCOPY_2017_2026\azure"
+
+$errorLogFile = "J:\BMC1001\BMC1001_XCOPY_2017_2026\errorlog.txt"
+
+# Batch size
+$batchSize = 100
+
+# =========================================================
+# VALIDATION
+# =========================================================
+
+if (!(Test-Path -LiteralPath $sourceFile)) {
+
+    Write-Host ""
+    Write-Host "SOURCE FILE NOT FOUND:"
+    Write-Host $sourceFile
+    Write-Host ""
+
+    exit
+}
+
+# =========================================================
+# CREATE REQUIRED FOLDERS
+# =========================================================
+
+$logDir = Split-Path $errorLogFile -Parent
+
+if (!(Test-Path $logDir)) {
+
+    New-Item `
+        -ItemType Directory `
+        -Path $logDir `
+        -Force | Out-Null
+}
+
+if (!(Test-Path $destinationRoot)) {
+
+    New-Item `
+        -ItemType Directory `
+        -Path $destinationRoot `
+        -Force | Out-Null
+}
+
+# =========================================================
+# CLEAR OLD ERROR LOG
+# =========================================================
+
+if (Test-Path $errorLogFile) {
+
+    Clear-Content $errorLogFile
+}
+
+# =========================================================
+# READ FILE LIST
+# =========================================================
+
+Write-Host ""
+Write-Host "Reading source file list..."
+Write-Host ""
+
+$files = Get-Content -LiteralPath $sourceFile | ForEach-Object {
+
+    # Remove spaces and quotes
+    $_.Trim().Trim('"')
+
+} | Where-Object {
+
+    $_ -ne ""
+}
+
+if ($files.Count -eq 0) {
+
+    Write-Host "NO FILES FOUND."
+    exit
+}
+
+$total = $files.Count
+$copied = 0
+
+Write-Host "Total files found: $total"
+Write-Host ""
+
+# =========================================================
+# GROUP FILES BY SOURCE DIRECTORY
+# =========================================================
+
+$grouped = $files | Group-Object {
+
+    [System.IO.Path]::GetDirectoryName($_)
+}
+
+# =========================================================
+# PROGRESS TRACKING
+# =========================================================
+
+$nextCheckpoint = 100000
+
+# =========================================================
+# MAIN PROCESSING
+# =========================================================
+
+foreach ($group in $grouped) {
+
+    $sourceDir = $group.Name
+
+    # Skip invalid directories
+    if ([string]::IsNullOrWhiteSpace($sourceDir)) {
+
+        continue
+    }
+
+    # Build relative directory safely
+    $relativeDir = $sourceDir -replace '^[A-Za-z]:\\', ''
+
+    # Destination directory
+    $destDir = Join-Path $destinationRoot $relativeDir
+
+    # Create destination directory
+    if (!(Test-Path $destDir)) {
+
+        New-Item `
+            -ItemType Directory `
+            -Path $destDir `
+            -Force | Out-Null
+    }
+
+    # Extract filenames only
+    $fileNames = $group.Group | ForEach-Object {
+
+        [System.IO.Path]::GetFileName($_)
+    }
+
+    # =====================================================
+    # BATCH PROCESSING
+    # =====================================================
+
+    for ($i = 0; $i -lt $fileNames.Count; $i += $batchSize) {
+
+        $endIndex = [Math]::Min(
+            $i + $batchSize - 1,
+            $fileNames.Count - 1
+        )
+
+        if ($i -eq $endIndex) {
+
+            $batch = @($fileNames[$i])
+
+        } else {
+
+            $batch = $fileNames[$i..$endIndex]
+        }
+
+        # =================================================
+        # BUILD ROBOCOPY ARGUMENTS
+        # =================================================
+
+        $roboArgs = @(
+            $sourceDir,
+            $destDir
+        )
+
+        # Add filenames
+        $roboArgs += $batch
+
+        # Robocopy switches
+        $roboArgs += @(
+            "/MT:16",
+            "/R:1",
+            "/W:1",
+            "/NFL",
+            "/NDL",
+            "/NJH",
+            "/NJS",
+            "/NC",
+            "/NS",
+            "/NP"
+        )
+
+        # =================================================
+        # RUN ROBOCOPY
+        # =================================================
+
+        Write-Host "Copying batch from:"
+        Write-Host $sourceDir
+        Write-Host ""
+
+        & robocopy @roboArgs
+
+        $exitCode = $LASTEXITCODE
+
+        # =================================================
+        # SUCCESS
+        # =================================================
+
+        if ($exitCode -le 7) {
+
+            $copied += $batch.Count
+
+            while ($copied -ge $nextCheckpoint) {
+
+                Write-Host ""
+                Write-Host "Copied $nextCheckpoint of $total files..."
+                Write-Host ""
+
+                $nextCheckpoint += 100000
+            }
+
+        } else {
+
+            # =============================================
+            # FAILURE LOGGING
+            # =============================================
+
+            Write-Host ""
+            Write-Host "ROBOCOPY FAILED:"
+            Write-Host "Exit Code: $exitCode"
+            Write-Host ""
+
+            foreach ($file in $batch) {
+
+                Add-Content `
+                    -Path $errorLogFile `
+                    -Value "$sourceDir\$file"
+            }
+        }
+    }
+}
+
+# =========================================================
+# FINAL SUMMARY
+# =========================================================
+
+Write-Host ""
+Write-Host "========================================="
+Write-Host "COMPLETED"
+Write-Host "========================================="
+Write-Host "Total files found  : $total"
+Write-Host "Total files copied : $copied"
+Write-Host "Error log          : $errorLogFile"
+Write-Host "========================================="

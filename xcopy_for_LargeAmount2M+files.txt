@@ -1,0 +1,199 @@
+$sourceFile = "D:\HRHS1006\xcopy\MultimediaFiles.txt"
+$destinationRoot = "D:\HRHS1006\xcopy\Azure"
+$errorLogFile = "D:\HRHS1006\xcopy\error_log.txt"
+
+# Ensure folders exist
+$logDir = Split-Path $errorLogFile -Parent
+if (!(Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+if (!(Test-Path $destinationRoot)) { New-Item -ItemType Directory -Path $destinationRoot | Out-Null }
+
+# Clear previous log
+if (Test-Path $errorLogFile) { Clear-Content $errorLogFile }
+
+Write-Host "Reading file list..."
+
+# Fast read + clean
+$files = [System.IO.File]::ReadAllLines($sourceFile)
+$files = $files | Where-Object { $_.Trim() -ne "" }
+
+$total = $files.Count
+$copied = 0
+
+Write-Host "Total files   : $total"
+
+# Progress checkpoint
+$nextCheckpoint = 100000
+
+# Group by folder
+$grouped = $files | Group-Object { [System.IO.Path]::GetDirectoryName($_) }
+
+Write-Host "Total folders : $($grouped.Count)"
+Write-Host "-----------------------------------------"
+
+# Batch size (tune if needed)
+$batchSize = 100
+
+foreach ($group in $grouped) {
+
+    $sourceDir = $group.Name
+
+    # Maintain folder structure
+    $relativeDir = $sourceDir.Substring(3)
+    $destDir = Join-Path $destinationRoot $relativeDir
+
+    if (!(Test-Path $destDir)) {
+        [System.IO.Directory]::CreateDirectory($destDir) | Out-Null
+    }
+
+    # Extract file names
+    $fileNames = $group.Group | ForEach-Object {
+        [System.IO.Path]::GetFileName($_)
+    }
+
+    Write-Host ""
+    Write-Host "Copying folder: $sourceDir"
+    Write-Host "   Files: $($fileNames.Count)"
+
+    #  Process in batches
+    for ($i = 0; $i -lt $fileNames.Count; $i += $batchSize) {
+
+        $batch = $fileNames[$i..([Math]::Min($i + $batchSize - 1, $fileNames.Count - 1))]
+
+        # Run robocopy for selected files only
+        $output = robocopy `
+            $sourceDir `
+            $destDir `
+            /MT:16 `
+            /R:1 /W:1 `
+            /NFL /NDL /NJH /NJS /NC /NS /NP `
+            /IF $batch 2>&1
+
+        #  Check for errors
+        if ($LASTEXITCODE -gt 3) {
+            Add-Content $errorLogFile "ERROR in folder: $sourceDir | ExitCode: $LASTEXITCODE"
+        }
+
+        # Optional: capture error lines
+        foreach ($line in $output) {
+            if ($line -match "ERROR|FAIL|cannot find") {
+                Add-Content $errorLogFile "$sourceDir -> $line"
+            }
+        }
+
+        #  Update copied count
+        $copied += $batch.Count
+
+        #  100K progress logic (YOUR REQUIREMENT)
+        while ($copied -ge $nextCheckpoint) {
+
+            Write-Host "Copied $nextCheckpoint of $total files..."
+
+            $nextCheckpoint += 100000
+        }
+    }
+
+    Write-Host "✔ Completed folder"
+    Write-Host "-----------------------------------------"
+}
+
+# Final summary
+Write-Host ""
+Write-Host "========================================="
+Write-Host "COMPLETED"
+Write-Host "========================================="
+Write-Host "Total files copied : $copied"
+Write-Host "Error log file     : $errorLogFile"
+Write-Host "========================================="
+
+======================================================================================
+Both are same but in below one it will show only this type of message --
+Total files: 5786434
+Copied 100000 of 5786434 files...
+Copied 200000 of 5786434 files...
+Copied 300000 of 5786434 files...
+...
+============================================================================================
+
+
+$sourceFile      = "F:\NWH2003\XCopy\20260318\MultimediaFiles.txt"
+$destinationRoot = "F:\NWH2003\XCopy\20260318\Azure"
+$errorLogFile    = "F:\NWH2003\XCopy\20260318\error_log.txt"
+
+# Ensure folders exist
+$logDir = Split-Path $errorLogFile -Parent
+if (!(Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+if (!(Test-Path $destinationRoot)) { New-Item -ItemType Directory -Path $destinationRoot | Out-Null }
+
+# Clear previous log
+if (Test-Path $errorLogFile) { Clear-Content $errorLogFile }
+
+Write-Host "Reading file list..."
+
+# Read + clean
+$files = [System.IO.File]::ReadAllLines($sourceFile)
+$files = $files | Where-Object { $_.Trim() -ne "" }
+
+$total = $files.Count
+$copied = 0
+
+Write-Host "Total files: $total"
+
+#  Progress checkpoint
+$nextCheckpoint = 100000
+
+# Group by folder
+$grouped = $files | Group-Object { [System.IO.Path]::GetDirectoryName($_) }
+
+# Batch size
+$batchSize = 100
+
+foreach ($group in $grouped) {
+
+    $sourceDir = $group.Name
+
+    # Maintain structure
+    $relativeDir = $sourceDir.Substring(3)
+    $destDir = Join-Path $destinationRoot $relativeDir
+
+    if (!(Test-Path $destDir)) {
+        [System.IO.Directory]::CreateDirectory($destDir) | Out-Null
+    }
+
+    # Extract filenames
+    $fileNames = $group.Group | ForEach-Object {
+        [System.IO.Path]::GetFileName($_)
+    }
+
+    # Batch processing
+    for ($i = 0; $i -lt $fileNames.Count; $i += $batchSize) {
+
+        $batch = $fileNames[$i..([Math]::Min($i + $batchSize - 1, $fileNames.Count - 1))]
+
+        robocopy `
+            $sourceDir `
+            $destDir `
+            /MT:16 `
+            /R:1 /W:1 `
+            /NFL /NDL /NJH /NJS /NC /NS /NP `
+            /IF $batch > $null
+
+        # Update count
+        $copied += $batch.Count
+
+        #  Only 100K progress message
+        while ($copied -ge $nextCheckpoint) {
+
+            Write-Host "Copied $nextCheckpoint of $total files..."
+
+            $nextCheckpoint += 100000
+        }
+    }
+}
+
+# Final summary
+Write-Host ""
+Write-Host "-----------------------------------------"
+Write-Host "COMPLETED"
+Write-Host "-----------------------------------------"
+Write-Host "Total files copied : $copied"
+Write-Host "-----------------------------------------"
